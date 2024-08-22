@@ -97,58 +97,62 @@ def __bulk_scrape(client,
         total = len(entity_array)
         # Index for progress bar
         i = 0
-
+        sceneCount = 0
         # Scrape if url not in missing_scrapers
         for entity in entity_array:
-            # Update status bar
-            i += 1
-            log.LogProgress(i / total)
+            try:
+                # Update status bar
+                i += 1
+                sceneCount += 1
+                log.LogProgress(i / total)
 
-            if entity.get('url') is None or entity.get('url') == "":
-                # Skip the scene/gallery if it does not have an url
-                log.LogInfo(f"{entity_class.name} {entity.get('id')} is missing url")
-                continue
+                if entity.get('url') is None or entity.get('url') == "":
+                    # Skip the scene/gallery if it does not have an url
+                    log.LogInfo(f"{entity_class.name} {entity.get('id')} is missing url")
+                    continue
 
-            url_netloc = urlparse(entity.get("url")).netloc.split('www.')[-1]  # URL domain name (without www. and tld)
-            if url_netloc not in missing_scrapers:
-                if delay:
-                    last_request = wait(delay, last_request, time.time())
+                url_netloc = urlparse(entity.get("url")).netloc.split('www.')[-1]  # URL domain name (without www. and tld)
+                if url_netloc not in missing_scrapers:
+                    if delay:
+                        last_request = wait(delay, last_request, time.time())
 
-                # The query has different fields, so there can not be one scrapeURL function
-                if entity_class is Entity.Scene:
-                    scraped_data = client.scrapeSceneURL(entity.get('url'))
-                elif entity_class is Entity.Gallery:
-                    scraped_data = client.scrapeGalleryURL(entity.get('url'))
-                else:
-                    raise TypeError(f"Unexpected Entity type: {entity_class}")
-                if scraped_data is None:
-                    if url_netloc not in supported_scrapers:
-                        # If result is null, and url is not in list of supported scrapers, add url to missing_scrapers
-                        # Faster then checking every time, if url is in list of supported scrapers
-                        log.LogWarning(
-                            f"{entity_class.name} {entity.get('id')}: "
-                            f"Missing scraper for {url_netloc}"
-                        )
-                        log.LogDebug(f"Full url: {entity.get('url')}")
-                        missing_scrapers.append(url_netloc)
+                    # The query has different fields, so there can not be one scrapeURL function
+                    if entity_class is Entity.Scene:
+                        scraped_data = client.scrapeSceneURL(entity.get('url'))
+                    elif entity_class is Entity.Gallery:
+                        scraped_data = client.scrapeGalleryURL(entity.get('url'))
                     else:
-                        log.LogInfo(f"Could not scrape {entity_class.name.lower()} {entity.get('id')}")
-                        log.LogDebug("Return data was None")
-                    continue
-                # No data has been found for this scene
-                if not any(scraped_data.values()):
-                    log.LogInfo(f"Could not get data for {entity_class.name.lower()} {entity.get('id')}")
-                    continue
+                        raise TypeError(f"Unexpected Entity type: {entity_class}")
+                    if scraped_data is None:
+                        if url_netloc not in supported_scrapers:
+                            # If result is null, and url is not in list of supported scrapers, add url to missing_scrapers
+                            # Faster then checking every time, if url is in list of supported scrapers
+                            log.LogWarning(
+                                f"{entity_class.name} {entity.get('id')}: "
+                                f"Missing scraper for {url_netloc}"
+                            )
+                            log.LogDebug(f"Full url: {entity.get('url')}")
+                            missing_scrapers.append(url_netloc)
+                        else:
+                            log.LogInfo(f"Could not scrape {entity_class.name.lower()} {entity.get('id')}")
+                            log.LogDebug("Return data was None")
+                        continue
+                    # No data has been found for this scene
+                    if not any(scraped_data.values()):
+                        log.LogInfo(f"Could not get data for {entity_class.name.lower()} {entity.get('id')}")
+                        continue
 
-                update_entity(client=client, entity=entity, entity_type=entity_class,
-                              scraped_data=scraped_data,
-                              create_missing_tags=create_missing_tags,
-                              create_missing_performers=create_missing_performers,
-                              create_missing_studios=create_missing_studios,
-                              create_missing_movies=create_missing_movies)
+                    update_entity(client=client, entity=entity, entity_type=entity_class,
+                                scraped_data=scraped_data,
+                                create_missing_tags=create_missing_tags,
+                                create_missing_performers=create_missing_performers,
+                                create_missing_studios=create_missing_studios,
+                                create_missing_movies=create_missing_movies)
 
-                log.LogDebug(f"Scraped data for {entity_class.name.lower()} {entity.get('id')}")
-                count += 1
+                    log.LogDebug(f"[{sceneCount} / {total}] Scraped data for {entity_class.name.lower()} {entity.get('id')}")
+                    count += 1
+            except:
+                log.LogError("An exception occurred during bulk scene scrape")
 
         log.LogInfo(f"Scraped data for {count} {entity_class.value}")
 
@@ -213,10 +217,14 @@ def update_entity(client: StashInterface, entity, entity_type: Entity, scraped_d
     }
     if scraped_data.get('title'):
         update_data['title'] = scraped_data.get('title')
+    if scraped_data.get('code'):
+        update_data['code'] = scraped_data.get('code')
     if scraped_data.get('details'):
         update_data['details'] = scraped_data.get('details')
     if scraped_data.get('date'):
         update_data['date'] = scraped_data.get('date')
+    if scraped_data.get('director'):
+        update_data['director'] = scraped_data.get('director')
     if entity_type is Entity.Scene:
         # Images are only supported for scenes
         if scraped_data.get('image'):
